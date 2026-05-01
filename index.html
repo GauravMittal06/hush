@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#1a1625" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Hush" />
+  <meta name="description" content="Automatically mute your phone while you sleep" />
+  <link rel="manifest" href="manifest.json" />
+  <title>Hush · Sleep Silencer</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f0d18;
+      --surface: #1a1625;
+      --surface2: #221d30;
+      --surface3: #2e273f;
+      --accent: #c9b8f0;
+      --accent-soft: rgba(201, 184, 240, 0.12);
+      --accent-glow: rgba(201, 184, 240, 0.06);
+      --rose: #f0b8c9;
+      --rose-soft: rgba(240, 184, 201, 0.12);
+      --text: #f5f0ff;
+      --text-muted: rgba(245, 240, 255, 0.45);
+      --text-faint: rgba(245, 240, 255, 0.2);
+      --border: rgba(245, 240, 255, 0.08);
+      --border-hover: rgba(245, 240, 255, 0.14);
+      --green: #a8f0b8;
+      --green-soft: rgba(168, 240, 184, 0.1);
+      --radius: 20px;
+      --radius-sm: 12px;
+      --radius-xs: 8px;
+      --font-display: 'DM Serif Display', serif;
+      --font-body: 'DM Sans', sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-weight: 300;
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100dvh;
+      padding: 0;
+      position: relative;
+    }
+
+    /* starfield bg */
+    .stars {
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 50% 0%, rgba(100, 80, 160, 0.18) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 30% at 80% 20%, rgba(180, 120, 200, 0.1) 0%, transparent 60%);
+    }
+    .star {
+      position: absolute;
+      border-radius: 50%;
+      background: white;
+      animation: twinkle var(--dur, 3s) ease-in-out infinite var(--delay, 0s);
+    }
+    @keyframes twinkle {
+      0%, 100% { opacity: var(--min-op, 0.1); }
+      50% { opacity: var(--max-op, 0.6); }
+    }
+
+    /* layout */
+    .app {
+      position: relative; z-index: 1;
+      width: 100%; max-width: 420px;
+      min-height: 100dvh;
+      display: flex; flex-direction: column;
+      padding: env(safe-area-inset-top, 20px) 24px env(safe-area-inset-bottom, 20px);
+      gap: 0;
+    }
+
+    /* header */
+    .header {
+      padding-top: 12px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 28px;
+    }
+    .logo {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .logo-moon {
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .logo-moon svg { width: 22px; height: 22px; }
+    .logo-text {
+      font-family: var(--font-display);
+      font-size: 22px;
+      color: var(--accent);
+      letter-spacing: -0.3px;
+    }
+    .status-badge {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      padding: 5px 12px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      background: var(--surface);
+      transition: all 0.4s ease;
+    }
+    .status-badge.active {
+      color: var(--green);
+      background: var(--green-soft);
+      border-color: rgba(168, 240, 184, 0.25);
+    }
+
+    /* moon orb */
+    .orb-section {
+      display: flex; flex-direction: column; align-items: center;
+      margin-bottom: 32px;
+    }
+    .orb-wrapper {
+      position: relative;
+      width: 160px; height: 160px;
+      margin-bottom: 20px;
+    }
+    .orb-ring {
+      position: absolute; inset: 0;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      animation: pulse-ring 4s ease-in-out infinite;
+    }
+    .orb-ring:nth-child(2) {
+      inset: -14px;
+      border-color: rgba(201, 184, 240, 0.05);
+      animation-delay: 0.5s;
+    }
+    .orb-ring:nth-child(3) {
+      inset: -28px;
+      border-color: rgba(201, 184, 240, 0.03);
+      animation-delay: 1s;
+    }
+    @keyframes pulse-ring {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.02); opacity: 0.7; }
+    }
+    .orb {
+      position: absolute; inset: 0;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #3a2f5c, #1a1625 70%);
+      border: 1px solid rgba(201, 184, 240, 0.2);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+      overflow: hidden;
+    }
+    .orb::before {
+      content: '';
+      position: absolute;
+      top: 15%; left: 20%;
+      width: 40%; height: 30%;
+      background: rgba(201, 184, 240, 0.07);
+      border-radius: 50%;
+      filter: blur(8px);
+    }
+    .orb svg { width: 64px; height: 64px; position: relative; z-index: 1; }
+    .orb:active { transform: scale(0.95); }
+    .orb.muted {
+      background: radial-gradient(circle at 35% 35%, #1a2540, #0f0d18 70%);
+      border-color: rgba(168, 240, 184, 0.15);
+    }
+    .orb-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      letter-spacing: 0.3px;
+    }
+    .orb-sublabel {
+      font-size: 11px;
+      color: var(--text-faint);
+      margin-top: 4px;
+      letter-spacing: 0.2px;
+    }
+
+    /* time card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 14px;
+      transition: border-color 0.3s;
+    }
+    .card:hover { border-color: var(--border-hover); }
+    .card-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      margin-bottom: 14px;
+    }
+
+    /* time picker row */
+    .time-row {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .time-block {
+      flex: 1;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .time-block-label {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .time-input-wrap {
+      position: relative;
+      display: flex; align-items: center;
+    }
+    .time-input-wrap svg {
+      position: absolute; left: 12px;
+      width: 14px; height: 14px;
+      opacity: 0.35;
+      pointer-events: none;
+    }
+    input[type="time"] {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 18px;
+      font-weight: 400;
+      padding: 12px 12px 12px 34px;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      transition: border-color 0.25s;
+      letter-spacing: 0.5px;
+    }
+    input[type="time"]:focus {
+      border-color: rgba(201, 184, 240, 0.4);
+    }
+    input[type="time"]::-webkit-calendar-picker-indicator {
+      display: none;
+    }
+    .time-arrow {
+      color: var(--text-faint);
+      flex-shrink: 0;
+    }
+
+    /* duration display */
+    .duration-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--accent-soft);
+      border: 1px solid rgba(201, 184, 240, 0.15);
+      border-radius: 100px;
+      padding: 6px 14px;
+      font-size: 12px;
+      color: var(--accent);
+      margin-top: 14px;
+    }
+    .duration-pill svg { width: 12px; height: 12px; opacity: 0.7; }
+
+    /* toggle row */
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .toggle-info { display: flex; flex-direction: column; gap: 3px; }
+    .toggle-title { font-size: 14px; font-weight: 400; color: var(--text); }
+    .toggle-sub { font-size: 12px; color: var(--text-muted); }
+    .toggle {
+      position: relative;
+      width: 48px; height: 26px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .toggle input { display: none; }
+    .toggle-track {
+      position: absolute; inset: 0;
+      background: var(--surface3);
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      transition: all 0.3s ease;
+    }
+    .toggle input:checked ~ .toggle-track {
+      background: rgba(201, 184, 240, 0.2);
+      border-color: rgba(201, 184, 240, 0.4);
+    }
+    .toggle-thumb {
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 18px; height: 18px;
+      background: var(--text-muted);
+      border-radius: 50%;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .toggle input:checked ~ .toggle-thumb {
+      left: 25px;
+      background: var(--accent);
+    }
+
+    /* alarm note */
+    .alarm-note {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--rose-soft);
+      border: 1px solid rgba(240, 184, 201, 0.15);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      margin-bottom: 14px;
+    }
+    .alarm-note svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--rose); }
+    .alarm-note-text {
+      font-size: 12px;
+      color: rgba(240, 184, 201, 0.8);
+      line-height: 1.5;
+    }
+
+    /* big cta */
+    .cta-btn {
+      width: 100%;
+      padding: 17px;
+      border-radius: var(--radius);
+      border: none;
+      font-family: var(--font-body);
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: 0.2px;
+      cursor: pointer;
+      transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+      position: relative; overflow: hidden;
+      margin-bottom: 14px;
+    }
+    .cta-btn.enable {
+      background: rgba(201, 184, 240, 0.15);
+      border: 1px solid rgba(201, 184, 240, 0.3);
+      color: var(--accent);
+    }
+    .cta-btn.enable:active { transform: scale(0.97); background: rgba(201, 184, 240, 0.22); }
+    .cta-btn.disable {
+      background: rgba(168, 240, 184, 0.12);
+      border: 1px solid rgba(168, 240, 184, 0.25);
+      color: var(--green);
+    }
+    .cta-btn.disable:active { transform: scale(0.97); }
+    .cta-btn::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    /* next schedule */
+    .next-info {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-faint);
+      padding-bottom: 8px;
+      letter-spacing: 0.2px;
+    }
+    .next-info span { color: var(--text-muted); }
+
+    /* permission banner */
+    .perm-banner {
+      background: var(--surface);
+      border: 1px solid rgba(240, 184, 201, 0.2);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      margin-bottom: 14px;
+      font-size: 12px;
+      color: var(--rose);
+      line-height: 1.6;
+      display: none;
+    }
+    .perm-banner.show { display: block; }
+
+    /* toast */
+    .toast {
+      position: fixed;
+      bottom: calc(env(safe-area-inset-bottom, 20px) + 20px);
+      left: 50%; transform: translateX(-50%) translateY(20px);
+      background: var(--surface2);
+      border: 1px solid var(--border-hover);
+      border-radius: 100px;
+      padding: 10px 20px;
+      font-size: 13px;
+      color: var(--text);
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 100;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* countdown */
+    .countdown {
+      text-align: center;
+      margin-bottom: 14px;
+      display: none;
+    }
+    .countdown.show { display: block; }
+    .countdown-label { font-size: 11px; color: var(--text-faint); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
+    .countdown-time { font-family: var(--font-display); font-size: 36px; color: var(--accent); letter-spacing: -1px; }
+    .countdown-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+    /* scrollable content */
+    .scroll-content {
+      overflow-y: auto;
+      flex: 1;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding-bottom: 10px;
+    }
+    .scroll-content::-webkit-scrollbar { display: none; }
+
+    @media (max-height: 700px) {
+      .orb-wrapper { width: 120px; height: 120px; }
+      .orb svg { width: 48px; height: 48px; }
+      .orb-ring:nth-child(2) { inset: -10px; }
+      .orb-ring:nth-child(3) { inset: -20px; }
+      .orb-section { margin-bottom: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="stars" id="stars"></div>
+
+<div class="app">
+  <div class="header">
+    <div class="logo">
+      <div class="logo-moon">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="rgba(201,184,240,0.8)" stroke="rgba(201,184,240,0.5)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <span class="logo-text">hush</span>
+    </div>
+    <div class="status-badge" id="statusBadge">Inactive</div>
+  </div>
+
+  <div class="scroll-content">
+
+    <!-- orb -->
+    <div class="orb-section">
+      <div class="orb-wrapper">
+        <div class="orb-ring"></div>
+        <div class="orb-ring"></div>
+        <div class="orb-ring"></div>
+        <div class="orb" id="orb" onclick="toggleManual()">
+          <svg id="orbIcon" viewBox="0 0 24 24" fill="none">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="rgba(201,184,240,0.7)" stroke="rgba(201,184,240,0.4)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+      <div class="orb-label" id="orbLabel">Tap to silence now</div>
+      <div class="orb-sublabel" id="orbSublabel">or set a sleep schedule below</div>
+    </div>
+
+    <!-- countdown -->
+    <div class="countdown" id="countdown">
+      <div class="countdown-label" id="cdLabel">Muting in</div>
+      <div class="countdown-time" id="cdTime">—</div>
+      <div class="countdown-sub" id="cdSub">Phone will silence itself</div>
+    </div>
+
+    <!-- alarm note -->
+    <div class="alarm-note">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        <line x1="12" y1="2" x2="12" y2="4"/>
+      </svg>
+      <div class="alarm-note-text">Alarms always ring — Hush only silences calls, notifications and media.</div>
+    </div>
+
+    <!-- schedule card -->
+    <div class="card">
+      <div class="card-label">Sleep schedule</div>
+      <div class="time-row">
+        <div class="time-block">
+          <div class="time-block-label">Mute at</div>
+          <div class="time-input-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <input type="time" id="muteTime" value="22:30" onchange="update()" />
+          </div>
+        </div>
+        <div class="time-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+        <div class="time-block">
+          <div class="time-block-label">Unmute at</div>
+          <div class="time-input-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <input type="time" id="unmuteTime" value="07:00" onchange="update()" />
+          </div>
+        </div>
+      </div>
+      <div class="duration-pill" id="durationPill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <span id="durationText">8h 30m of quiet</span>
+      </div>
+    </div>
+
+    <!-- options -->
+    <div class="card">
+      <div class="card-label">Options</div>
+      <div class="toggle-row" style="margin-bottom: 16px;">
+        <div class="toggle-info">
+          <div class="toggle-title">Repeat every night</div>
+          <div class="toggle-sub">Automatically re-arm daily</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="repeatToggle" checked onchange="update()" />
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-title">Vibration only (optional)</div>
+          <div class="toggle-sub">Keep vibration during mute</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="vibToggle" onchange="save()" />
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
+      </div>
+    </div>
+
+    <!-- permission note -->
+    <div class="perm-banner" id="permBanner">
+      ⚠️ To automatically mute your phone, grant <strong>Do Not Disturb</strong> access in Android settings. Go to Settings → Apps → Hush → Permissions → Do Not Disturb.
+    </div>
+
+    <!-- CTA -->
+    <button class="cta-btn enable" id="ctaBtn" onclick="toggleSchedule()">
+      Enable Sleep Mode
+    </button>
+
+    <div class="next-info" id="nextInfo">Schedule not active</div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // --- Stars ---
+  const starsEl = document.getElementById('stars');
+  for (let i = 0; i < 60; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const size = Math.random() * 2 + 0.5;
+    s.style.cssText = `
+      width:${size}px; height:${size}px;
+      top:${Math.random()*100}%;
+      left:${Math.random()*100}%;
+      --dur:${2.5 + Math.random()*4}s;
+      --delay:${Math.random()*4}s;
+      --min-op:${0.05 + Math.random()*0.1};
+      --max-op:${0.3 + Math.random()*0.5};
+    `;
+    starsEl.appendChild(s);
+  }
+
+  // --- State ---
+  let state = load();
+  let tickInterval = null;
+  let manualMuted = false;
+
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem('hush_state') || '{}');
+      return {
+        muteTime: s.muteTime || '22:30',
+        unmuteTime: s.unmuteTime || '07:00',
+        enabled: s.enabled || false,
+        repeat: s.repeat !== undefined ? s.repeat : true,
+        vibOnly: s.vibOnly || false,
+      };
+    } catch { return { muteTime:'22:30', unmuteTime:'07:00', enabled:false, repeat:true, vibOnly:false }; }
+  }
+
+  function save() {
+    state.muteTime = document.getElementById('muteTime').value;
+    state.unmuteTime = document.getElementById('unmuteTime').value;
+    state.repeat = document.getElementById('repeatToggle').checked;
+    state.vibOnly = document.getElementById('vibToggle').checked;
+    localStorage.setItem('hush_state', JSON.stringify(state));
+    calcDuration();
+  }
+
+  function init() {
+    document.getElementById('muteTime').value = state.muteTime;
+    document.getElementById('unmuteTime').value = state.unmuteTime;
+    document.getElementById('repeatToggle').checked = state.repeat;
+    document.getElementById('vibToggle').checked = state.vibOnly;
+    calcDuration();
+    if (state.enabled) startSchedule(false);
+    updateUI();
+  }
+
+  function calcDuration() {
+    const [mh, mm] = state.muteTime.split(':').map(Number);
+    const [uh, um] = state.unmuteTime.split(':').map(Number);
+    let mins = (uh * 60 + um) - (mh * 60 + mm);
+    if (mins <= 0) mins += 24 * 60;
+    const h = Math.floor(mins / 60), m = mins % 60;
+    document.getElementById('durationText').textContent =
+      (h ? `${h}h ` : '') + (m ? `${m}m ` : '') + 'of quiet';
+  }
+
+  function update() { save(); updateUI(); }
+
+  // --- Schedule logic ---
+  function parseTime(str) {
+    const [h, m] = str.split(':').map(Number);
+    return h * 60 + m;
+  }
+
+  function nowMins() {
+    const n = new Date();
+    return n.getHours() * 60 + n.getMinutes();
+  }
+
+  function isMuteWindow() {
+    const now = nowMins();
+    const mt = parseTime(state.muteTime);
+    const ut = parseTime(state.unmuteTime);
+    if (mt < ut) return now >= mt && now < ut;
+    else return now >= mt || now < ut; // crosses midnight
+  }
+
+  function minsUntil(targetMins) {
+    const now = nowMins();
+    let diff = targetMins - now;
+    if (diff < 0) diff += 24 * 60;
+    return diff;
+  }
+
+  function fmtCountdown(mins) {
+    const h = Math.floor(mins / 60), m = mins % 60;
+    if (h > 0) return `${h}h ${String(m).padStart(2,'0')}m`;
+    return `${m}m`;
+  }
+
+  function startSchedule(showToast = true) {
+    state.enabled = true;
+    save();
+    if (tickInterval) clearInterval(tickInterval);
+    tickInterval = setInterval(tick, 30000);
+    tick();
+    if (showToast) toast('Sleep mode on ✦');
+  }
+
+  function stopSchedule(showToast = true) {
+    state.enabled = false;
+    save();
+    if (tickInterval) { clearInterval(tickInterval); tickInterval = null; }
+    if (!manualMuted) unmuteDevice();
+    document.getElementById('countdown').classList.remove('show');
+    if (showToast) toast('Schedule off');
+  }
+
+  function tick() {
+    const muting = isMuteWindow();
+    if (muting) {
+      muteDevice();
+      const ut = parseTime(state.unmuteTime);
+      const remaining = minsUntil(ut);
+      document.getElementById('countdown').classList.add('show');
+      document.getElementById('cdLabel').textContent = 'Unmuting in';
+      document.getElementById('cdTime').textContent = fmtCountdown(remaining);
+      document.getElementById('cdSub').textContent = 'Your alarm will still ring';
+    } else {
+      if (!manualMuted) unmuteDevice();
+      const mt = parseTime(state.muteTime);
+      const toMute = minsUntil(mt);
+      document.getElementById('countdown').classList.add('show');
+      document.getElementById('cdLabel').textContent = 'Muting in';
+      document.getElementById('cdTime').textContent = fmtCountdown(toMute);
+      document.getElementById('cdSub').textContent = state.repeat ? 'Repeats every night' : 'Tonight only';
+    }
+    updateUI();
+  }
+
+  // --- Device mute via Web API ---
+  function muteDevice() {
+    // Attempt via Audio Context (mutes media in browser env)
+    try {
+      if (!window._hushCtx) {
+        window._hushCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      window._hushCtx.suspend();
+    } catch(e) {}
+    // For Android WebView / TWA, post message to native layer
+    if (window.HushAndroid) {
+      try { window.HushAndroid.setMute(true, document.getElementById('vibToggle').checked); } catch(e) {}
+    }
+    // Visual state
+    setMuteVisual(true);
+    document.getElementById('statusBadge').textContent = 'Silent';
+    document.getElementById('statusBadge').classList.add('active');
+  }
+
+  function unmuteDevice() {
+    try { if (window._hushCtx) window._hushCtx.resume(); } catch(e) {}
+    if (window.HushAndroid) {
+      try { window.HushAndroid.setMute(false, false); } catch(e) {}
+    }
+    setMuteVisual(false);
+    document.getElementById('statusBadge').textContent = state.enabled ? 'Active' : 'Inactive';
+    document.getElementById('statusBadge').classList.toggle('active', state.enabled);
+  }
+
+  function setMuteVisual(muted) {
+    const orb = document.getElementById('orb');
+    orb.classList.toggle('muted', muted);
+    document.getElementById('orbIcon').innerHTML = muted
+      ? `<line x1="1" y1="1" x2="23" y2="23" stroke="rgba(168,240,184,0.6)" stroke-width="1.5" stroke-linecap="round"/>
+         <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" fill="none" stroke="rgba(168,240,184,0.6)" stroke-width="1.5" stroke-linecap="round"/>
+         <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" fill="none" stroke="rgba(168,240,184,0.6)" stroke-width="1.5" stroke-linecap="round"/>
+         <line x1="12" y1="19" x2="12" y2="23" stroke="rgba(168,240,184,0.6)" stroke-width="1.5" stroke-linecap="round"/>
+         <line x1="8" y1="23" x2="16" y2="23" stroke="rgba(168,240,184,0.6)" stroke-width="1.5" stroke-linecap="round"/>`
+      : `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="rgba(201,184,240,0.7)" stroke="rgba(201,184,240,0.4)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    document.getElementById('orbLabel').textContent = muted ? 'Phone is silent' : 'Tap to silence now';
+    document.getElementById('orbSublabel').textContent = muted ? 'Alarms will still ring' : 'or set a sleep schedule below';
+  }
+
+  function toggleManual() {
+    manualMuted = !manualMuted;
+    if (manualMuted) { muteDevice(); toast('Phone silenced'); }
+    else { unmuteDevice(); toast('Sound restored'); }
+  }
+
+  function toggleSchedule() {
+    if (state.enabled) stopSchedule();
+    else startSchedule();
+    updateUI();
+  }
+
+  function updateUI() {
+    const btn = document.getElementById('ctaBtn');
+    const nextInfo = document.getElementById('nextInfo');
+    const badge = document.getElementById('statusBadge');
+
+    if (state.enabled) {
+      btn.className = 'cta-btn disable';
+      btn.textContent = 'Cancel Schedule';
+      badge.textContent = isMuteWindow() ? 'Silent' : 'Active';
+      badge.classList.toggle('active', true);
+      const mt = parseTime(state.muteTime);
+      const ut = parseTime(state.unmuteTime);
+      if (isMuteWindow()) {
+        nextInfo.innerHTML = `Unmuting at <span>${state.unmuteTime}</span>`;
+      } else {
+        nextInfo.innerHTML = `Silencing at <span>${state.muteTime}</span> tonight`;
+      }
+    } else {
+      btn.className = 'cta-btn enable';
+      btn.textContent = 'Enable Sleep Mode';
+      badge.textContent = 'Inactive';
+      badge.classList.remove('active');
+      nextInfo.textContent = 'Schedule not active';
+    }
+
+    // show perm banner on Android if no native bridge
+    if (/android/i.test(navigator.userAgent) && !window.HushAndroid) {
+      document.getElementById('permBanner').classList.add('show');
+    }
+  }
+
+  function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2400);
+  }
+
+  // --- Notification-based mute (best effort in browser) ---
+  // For real Android DND control, this PWA needs to be wrapped in a
+  // TWA (Trusted Web Activity) with a native Android bridge.
+  // The HushAndroid object above is the bridge interface.
+
+  // Visibility change — re-check on wake
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && state.enabled) tick();
+  });
+
+  init();
+</script>
+</body>
+</html>
